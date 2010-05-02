@@ -2,13 +2,15 @@ package main
 
 import (
 	"./msglite"
-	"fmt"
-	"time"
 )
 
 func main() {
 	exchange := msglite.NewExchange()
-		
+	socketServer := msglite.NewSocketServer(exchange, "/tmp/msglite.socket")
+	
+	socketServer.Run()
+
+	/*		
 	go func() {
 		for {
 			msg := <- exchange.ReadyOnAddress("/sphynx")
@@ -35,4 +37,5 @@ func main() {
 			exchange.SendMessage("/shouts", "", true, "HAAAAAY!")
 		}
 	}
+	*/
 }
