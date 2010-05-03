@@ -61,7 +61,7 @@ func (exchange *Exchange) handleReadyState(rs readyState) {
 		rs.messageChan <- unreadyQueue.At(0).(Message)
 		unreadyQueue.Delete(0)
 		if unreadyQueue.Len() == 0 {
-			exchange.unreadyQueues[rs.onAddress] = nil
+			exchange.unreadyQueues[rs.onAddress] = nil, false
 		}
 	} else {
 		if exchange.readyMap[rs.onAddress] == nil {
@@ -84,7 +84,7 @@ func (exchange *Exchange) handleMessage(m Message) {
 			readyStates.At(0).(*readyState).messageChan <- m
 			readyStates.Delete(0)
 			if readyStates.Len() == 0 {
-				exchange.readyMap[m.ToAddress] = nil
+				exchange.readyMap[m.ToAddress] = nil, false
 			}
 		}
 	} else {
