@@ -89,6 +89,11 @@ func (stream *CommandStream) WriteMessage(msg Message) os.Error {
 		return err
 	}
 	
+	_, err = io.WriteString(stream.writer, "\n")
+	if err != nil {
+		return err
+	}
+	
 	_, err = io.WriteString(stream.writer, msg.Body)
 	if err != nil {
 		return err
