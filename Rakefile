@@ -5,8 +5,8 @@ CLOBBER.include('msglite')
 
 task :default => ["msglite"]
 
-file 'msglite.6' => ['core.go', 'socket.go'] do
-	sh "6g -o msglite.6 core.go socket.go"
+file 'msglite.6' => ['core.go', 'server.go', 'stream.go'] do
+	sh "6g -o msglite.6 core.go server.go stream.go"
 end
 
 file 'main.6' => ['main.go', 'msglite.6'] do
