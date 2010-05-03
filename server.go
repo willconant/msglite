@@ -25,6 +25,10 @@ func NewServer(exchange *Exchange, network string, laddr string) (server *Server
 		panic(err)
 	}
 	
+	if network == "unix" {
+		os.Chmod(laddr, 0777)
+	}
+	
 	return
 }
 
