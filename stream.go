@@ -79,9 +79,7 @@ func (stream *CommandStream) WriteMessage(msg Message) os.Error {
 	if msg.ReplyAddress != "" {
 		headers["reply"] = msg.ReplyAddress
 	}
-	if msg.Broadcast {
-		headers["bcast"] = "1"
-	}
+	headers["timeout"] = strconv.Itoa64(msg.TimeoutSeconds)
 	headers["body"] = strconv.Itoa(len(msg.Body))
 
 	err := stream.WriteCommand("MESSAGE", headers)

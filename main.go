@@ -36,6 +36,8 @@ func main() {
 				quit = true
 			case 3: // SIGQUIT
 				quit = true
+			case 15: // SIGTERM
+				quit = true
 			}
 		}
 		server.Quit()

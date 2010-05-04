@@ -42,7 +42,7 @@ func (server *HttpServer) handleReq(conn *http.Conn, req *http.Request) {
 		http.Error(conn, err.String(), http.StatusInternalServerError)
 	}
 	
-	reply := server.exchange.SendQuery(server.exchangeToAddress, msgBody)
+	reply := server.exchange.Query(server.exchangeToAddress, 10, msgBody)
 	
 	server.transformReply(reply, conn)
 }

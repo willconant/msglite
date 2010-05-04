@@ -67,12 +67,22 @@ func (server *Server) handle(stream *CommandStream) {
 	handleReady := func(headers map[string]string) {
 		onAddress, ok := headers["on"]
 		if !ok {
-			stream.WriteError(os.NewError("missing header in READY: on"))
+			stream.WriteError(os.NewError("missing header in READY: on")); return
 		}
 		
-		msg := <- server.exchange.ReadyOnAddress(onAddress)
+		timeoutStr, ok := headers["timeout"]
+		if !ok {
+			stream.WriteError(os.NewError("missing header in READY: timeout")); return
+		}
+		
+		timeout, err := strconv.Atoi64(timeoutStr)
+		if err != nil {
+			stream.WriteError(os.NewError("invalid format for timeout header in READY")); return
+		}
+		
+		msg := <-server.exchange.Ready(onAddress, timeout)
 	
-		err := stream.WriteMessage(msg)
+		err = stream.WriteMessage(msg)
 		if err != nil {
 			stream.WriteError(err); return
 		}
@@ -84,12 +94,27 @@ func (server *Server) handle(stream *CommandStream) {
 			stream.WriteError(os.NewError("invalid format for header body")); return
 		}
 		
+		timeout, err := strconv.Atoi64(headers["timeout"])
+		if err != nil {
+			stream.WriteError(os.NewError("invalid format for header timeout")); return
+		}
+		
 		body, err := stream.ReadBody(bodyLen)
 		
-		server.exchange.SendMessage(headers["to"], headers["reply"], headers["bcast"] == "1", body)
+		server.exchange.Send(headers["to"], headers["reply"], timeout, body)
 	}
 	
 	handleQuery := func(headers map[string]string) {
+		timeoutStr, ok := headers["timeout"]
+		if !ok {
+			stream.WriteError(os.NewError("missing header in READY: timeout")); return
+		}
+		
+		timeout, err := strconv.Atoi64(timeoutStr)
+		if err != nil {
+			stream.WriteError(os.NewError("invalid format for timeout header in READY")); return
+		}
+	
 		bodyLen, err := strconv.Atoi(headers["body"])
 		if err != nil {
 			stream.WriteError(os.NewError("invalid format for header body")); return
@@ -97,7 +122,7 @@ func (server *Server) handle(stream *CommandStream) {
 		
 		body, err := stream.ReadBody(bodyLen)
 		
-		msg := server.exchange.SendQuery(headers["to"], body)
+		msg := server.exchange.Query(headers["to"], timeout, body)
 		
 		err = stream.WriteMessage(msg)
 		if err != nil {
