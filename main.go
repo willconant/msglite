@@ -4,13 +4,15 @@ import (
 	"./msglite"
 	"flag"
 	"fmt"
+	"os"
 	"os/signal"
 )
 
 func main() {
-	var network, laddr string
-	flag.StringVar(&network, "n", "unix", "unix or tcp")
-	flag.StringVar(&laddr, "a", "", "listen address (either socket path, or ip:port)")
+	var network, laddr, logLevel string
+	flag.StringVar(&network, "network", "unix", "unix or tcp")
+	flag.StringVar(&laddr, "laddr", "", "listen address (either socket path, or ip:port)")
+	flag.StringVar(&logLevel, "loglevel", "info", "logging level (one of 'minimal', 'info' or 'debug')")
 	flag.Parse()
 	
 	if laddr == "" {
@@ -21,8 +23,23 @@ func main() {
 			laddr = "127.0.0.1:9999"
 		}
 	}	
-
-	server := msglite.NewServer(msglite.NewExchange(), network, laddr)
+	
+	exchange := msglite.NewExchange()
+	
+	switch logLevel {
+	case "minimal":
+		exchange.SetLogLevel(msglite.LogLevelMinimal)
+	case "info":
+		exchange.SetLogLevel(msglite.LogLevelInfo)
+	case "debug":
+		exchange.SetLogLevel(msglite.LogLevelDebug)
+	default:
+		os.Stderr.WriteString(fmt.Sprintf("linvalid log level: %v\n", logLevel))
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+	
+	server := msglite.NewServer(exchange, network, laddr)
 	
 	go func() {
 		quit := false

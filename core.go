@@ -11,6 +11,13 @@ const (
 	AddressReadyTimeout = "msglite.ReadyTimeout"
 )
 
+const (
+	_ = iota
+	LogLevelMinimal
+	LogLevelInfo
+	LogLevelDebug
+)
+
 type Message struct {
 	ToAddress string
 	ReplyAddress string
@@ -32,6 +39,8 @@ type Exchange struct {
 	
 	readyStateQueues     map [string] *vector.Vector
 	messageQueues        map [string] *vector.Vector
+	
+	logLevel             int
 }
 
 func NewExchange() (exchange *Exchange) {
@@ -41,6 +50,7 @@ func NewExchange() (exchange *Exchange) {
 		make(chan (chan string)),
 		make(map [string] *vector.Vector),
 		make(map [string] *vector.Vector),
+		LogLevelInfo,
 	}
 	
 	ticker := time.NewTicker(1e9)
@@ -63,19 +73,36 @@ func NewExchange() (exchange *Exchange) {
 	return
 }
 
+func (exchange *Exchange) SetLogLevel(l int) {
+	exchange.logLevel = l
+}
+
+func (exchange *Exchange) log(level int, s string) {
+	if level <= exchange.logLevel {
+		fmt.Println(s)
+	}
+}
+
+func (exchange *Exchange) logf(level int, format string, v ...interface{}) {
+	exchange.log(level, fmt.Sprintf(format, v))
+}
+
 func (exchange *Exchange) handleReadyState(rs readyState) {
-	fmt.Printf("cilent ready on '%v'", rs.onAddress)
+	exchange.logf(LogLevelDebug, "! ready %v", rs.onAddress)
 
 	if messageQueue, exists := exchange.messageQueues[rs.onAddress]; exists {
-		fmt.Printf(" <- %v queued messages, sending now\n", messageQueue.Len())
+		m := messageQueue.At(0).(Message)
 		
-		rs.messageChan <- messageQueue.At(0).(Message)
+		exchange.logf(LogLevelInfo, "< %v (%v)", m.ToAddress, m.ReplyAddress)
+		exchange.logf(LogLevelInfo, "  received, %v left in queue", messageQueue.Len() - 1)
+		
+		rs.messageChan <- m
 		messageQueue.Delete(0)
 		if messageQueue.Len() == 0 {
 			exchange.messageQueues[rs.onAddress] = nil, false
 		}
 	} else {
-		fmt.Printf(" <- 0 queued messages, waiting...\n")
+		exchange.logf(LogLevelDebug, "  waiting")
 		
 		if exchange.readyStateQueues[rs.onAddress] == nil {
 			exchange.readyStateQueues[rs.onAddress] = new(vector.Vector)
@@ -85,10 +112,10 @@ func (exchange *Exchange) handleReadyState(rs readyState) {
 }
 
 func (exchange *Exchange) handleMessage(m Message) {
-	fmt.Printf("message from '%v' to '%v'", m.ReplyAddress, m.ToAddress)
+	exchange.logf(LogLevelInfo, "> %v (%v)", m.ToAddress, m.ReplyAddress)
 	
 	if readyStateQueue, exists := exchange.readyStateQueues[m.ToAddress]; exists {
-		fmt.Printf(" -> %v clients ready, sending now\n", readyStateQueue.Len())
+		exchange.logf(LogLevelInfo, "  delivered")
 	
 		readyStateQueue.At(0).(*readyState).messageChan <- m
 		readyStateQueue.Delete(0)
@@ -96,7 +123,7 @@ func (exchange *Exchange) handleMessage(m Message) {
 			exchange.readyStateQueues[m.ToAddress] = nil, false
 		}
 	} else {
-		fmt.Printf(" -> 0 clients ready, queueing...\n")
+		exchange.logf(LogLevelDebug, "  queued")
 	
 		if exchange.messageQueues[m.ToAddress] == nil {
 			exchange.messageQueues[m.ToAddress] = new(vector.Vector)
@@ -121,7 +148,7 @@ func (exchange *Exchange) handleTick(t int64) {
 		for i := 0; i < messageQueue.Len(); i++ {
 			msg := messageQueue.At(i).(Message)
 			if msg.timeout < t {
-				fmt.Printf("send timeout for message to '%v' from '%v'\n", toAddress, msg.ReplyAddress)
+				exchange.logf(LogLevelDebug, "! send timeout %v (%v)", toAddress, msg.ReplyAddress)
 				messageQueue.Delete(i)
 				i--
 			}
@@ -139,7 +166,7 @@ func (exchange *Exchange) handleTick(t int64) {
 		for i := 0; i < readyStateQueue.Len(); i++ {
 			readyState := readyStateQueue.At(i).(*readyState)
 			if readyState.timeout < t {
-				fmt.Printf("ready timeout for client on '%v'\n", onAddress)
+				exchange.logf(LogLevelDebug, "! ready timeout %v", onAddress)
 				readyState.messageChan <- Message{AddressReadyTimeout, "", 0, "", 0}
 				readyStateQueue.Delete(i)
 				i--
