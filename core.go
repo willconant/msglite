@@ -26,14 +26,18 @@ type Message struct {
 	timeout int64
 }
 
+const maxOnAddresses = 8
+
 type readyState struct {
-	onAddress string
+	onAddresses [maxOnAddresses]string
+	onAddressCount int
 	timeout int64
 	messageChan chan <- Message
+	timeoutReceived bool
 }
 
 type Exchange struct {
-	readyStateChan       chan readyState
+	readyStateChan       chan *readyState
 	messageChan          chan Message
 	unusedAddressReqChan chan (chan string)
 	
@@ -45,7 +49,7 @@ type Exchange struct {
 
 func NewExchange() (exchange *Exchange) {
 	exchange = &Exchange{
-		make(chan readyState),
+		make(chan *readyState),
 		make(chan Message),
 		make(chan (chan string)),
 		make(map [string] *vector.Vector),
@@ -87,27 +91,49 @@ func (exchange *Exchange) logf(level int, format string, v ...interface{}) {
 	exchange.log(level, fmt.Sprintf(format, v))
 }
 
-func (exchange *Exchange) handleReadyState(rs readyState) {
-	exchange.logf(LogLevelDebug, "! ready %v", rs.onAddress)
+func (exchange *Exchange) handleReadyState(rs *readyState) {
+	for i := 0; i < rs.onAddressCount; i++ {
+		exchange.logf(LogLevelDebug, "! ready %v", rs.onAddresses[i])
+		
+		if messageQueue, exists := exchange.messageQueues[rs.onAddresses[i]]; exists {
+			m := messageQueue.At(0).(Message)
+			
+			exchange.logf(LogLevelInfo, "< %v (%v)", m.ToAddress, m.ReplyAddress)
+			exchange.logf(LogLevelInfo, "  received, %v left in queue", messageQueue.Len() - 1)
+			
+			rs.messageChan <- m
+			messageQueue.Delete(0)
+			if messageQueue.Len() == 0 {
+				exchange.messageQueues[rs.onAddresses[i]] = nil, false
+			}
+			
+			return
+		}
+	}
+	
+	// no queued messages
+	exchange.logf(LogLevelDebug, "  waiting")
+	
+	for i := 0; i < rs.onAddressCount; i++ {
+		if exchange.readyStateQueues[rs.onAddresses[i]] == nil {
+			exchange.readyStateQueues[rs.onAddresses[i]] = new(vector.Vector)
+		}
+		exchange.readyStateQueues[rs.onAddresses[i]].Push(rs)
+	}
+}
 
-	if messageQueue, exists := exchange.messageQueues[rs.onAddress]; exists {
-		m := messageQueue.At(0).(Message)
-		
-		exchange.logf(LogLevelInfo, "< %v (%v)", m.ToAddress, m.ReplyAddress)
-		exchange.logf(LogLevelInfo, "  received, %v left in queue", messageQueue.Len() - 1)
-		
-		rs.messageChan <- m
-		messageQueue.Delete(0)
-		if messageQueue.Len() == 0 {
-			exchange.messageQueues[rs.onAddress] = nil, false
+func (exchange *Exchange) unqueueReadyState(rs *readyState) {
+	for i := 0; i < rs.onAddressCount; i++ {
+		readyStateQueue := exchange.readyStateQueues[rs.onAddresses[i]]
+		for j := 0; j < readyStateQueue.Len(); j++ {
+			if readyStateQueue.At(j).(*readyState) == rs {
+				readyStateQueue.Delete(j)
+				if readyStateQueue.Len() == 0 {
+					exchange.readyStateQueues[rs.onAddresses[i]] = nil, false
+				}
+				break
+			}
 		}
-	} else {
-		exchange.logf(LogLevelDebug, "  waiting")
-		
-		if exchange.readyStateQueues[rs.onAddress] == nil {
-			exchange.readyStateQueues[rs.onAddress] = new(vector.Vector)
-		}
-		exchange.readyStateQueues[rs.onAddress].Push(&rs)
 	}
 }
 
@@ -116,12 +142,10 @@ func (exchange *Exchange) handleMessage(m Message) {
 	
 	if readyStateQueue, exists := exchange.readyStateQueues[m.ToAddress]; exists {
 		exchange.logf(LogLevelInfo, "  delivered")
-	
-		readyStateQueue.At(0).(*readyState).messageChan <- m
-		readyStateQueue.Delete(0)
-		if readyStateQueue.Len() == 0 {
-			exchange.readyStateQueues[m.ToAddress] = nil, false
-		}
+		
+		rs := readyStateQueue.At(0).(*readyState)
+		rs.messageChan <- m
+		exchange.unqueueReadyState(rs)		
 	} else {
 		exchange.logf(LogLevelDebug, "  queued")
 	
@@ -167,7 +191,10 @@ func (exchange *Exchange) handleTick(t int64) {
 			readyState := readyStateQueue.At(i).(*readyState)
 			if readyState.timeout < t {
 				exchange.logf(LogLevelDebug, "! ready timeout %v", onAddress)
-				readyState.messageChan <- Message{AddressReadyTimeout, "", 0, "", 0}
+				if !readyState.timeoutReceived {
+					readyState.messageChan <- Message{AddressReadyTimeout, "", 0, "", 0}
+					readyState.timeoutReceived = true
+				}
 				readyStateQueue.Delete(i)
 				i--
 			}
@@ -194,12 +221,19 @@ func (exchange *Exchange) Send(toAddress string, replyAddress string, timeoutSec
 func (exchange *Exchange) Query(toAddress string, timeoutSeconds int64, body string) Message {
 	replyAddr := exchange.GenerateUnusedAddress()
 	exchange.messageChan <- Message{toAddress, replyAddr, timeoutSeconds, body, time.Nanoseconds() + (timeoutSeconds * 1e9)}
-	return <- exchange.Ready(replyAddr, timeoutSeconds)
+	return <- exchange.Ready([]string{replyAddr}, timeoutSeconds)
 }
 
-func (exchange *Exchange) Ready(onAddress string, timeoutSeconds int64) <-chan Message {
+func (exchange *Exchange) Ready(onAddresses []string, timeoutSeconds int64) <-chan Message {
+	rs := new(readyState)
+	for i := 0; i < len(onAddresses); i++ {
+		rs.onAddresses[i] = onAddresses[i]
+	}
+	rs.onAddressCount = len(onAddresses)
+	rs.timeout = time.Nanoseconds() + (timeoutSeconds * 1e9)
 	messageChan := make(chan Message)
-	exchange.readyStateChan <- readyState{onAddress, time.Nanoseconds() + (timeoutSeconds * 1e9), messageChan}
+	rs.messageChan = messageChan
+
+	exchange.readyStateChan <- rs
 	return messageChan
 }
-

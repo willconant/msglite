@@ -65,9 +65,21 @@ func (server *Server) Quit() {
 func (server *Server) handle(stream *CommandStream) {
 		
 	handleReady := func(headers map[string]string) {
-		onAddress, ok := headers["on"]
-		if !ok {
-			stream.WriteError(os.NewError("missing header in READY: on")); return
+		var onAddresses [maxOnAddresses]string
+		onAddressCount := 0
+		
+		for onAddressCount < maxOnAddresses {
+			onAddress, ok := headers["on" + strconv.Itoa(onAddressCount)]
+			if !ok {
+				break
+			}
+			
+			onAddresses[onAddressCount] = onAddress
+			onAddressCount += 1
+		}
+	
+		if onAddressCount == 0 {
+			stream.WriteError(os.NewError("missing header in READY: on0..onN")); return
 		}
 		
 		timeoutStr, ok := headers["timeout"]
@@ -80,7 +92,7 @@ func (server *Server) handle(stream *CommandStream) {
 			stream.WriteError(os.NewError("invalid format for timeout header in READY")); return
 		}
 		
-		msg := <-server.exchange.Ready(onAddress, timeout)
+		msg := <-server.exchange.Ready(onAddresses[0:onAddressCount], timeout)
 	
 		err = stream.WriteMessage(msg)
 		if err != nil {
