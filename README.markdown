@@ -52,9 +52,10 @@ Msglite is written in the Go programming language.
 Getting Started
 ---------------
 
-Follow the instructions for installing the Go programming language here:
+Follow these [instructions][go_install] for installing the Go programming
+language.
 
-http://golang.org/doc/install.html
+[go_install]: <http://golang.org/doc/install.html>
 
 Then download and build msglite like this:
 
@@ -64,7 +65,7 @@ Then download and build msglite like this:
 
 Start msglite like this:
 
-    $ ./msglite -network unix -laddr /path/to/msglite.socket
+    $ ./msglite
 
 
 Client Libraries
@@ -78,6 +79,12 @@ The whole thing is fewer than 160 lines. Writing a client library for your
 prefered language should be trivial.
 
 
+Listening on a Different Unix Socket
+------------------------------------
+
+    $ ./msglite -network unix -laddr /path/to/msglite.socket
+
+
 Listening on a TCP Socket
 -------------------------
 
@@ -87,11 +94,6 @@ Listening on a TCP Socket
 Adjusting Log Output
 --------------------
 
-Msglite supports a `-loglevel` command line switch. The following values are
-supported:
-
-- minimal
-- info
-- debug
+    $ ./msglite -loglevel [minimal|info|debug]
 
 The default setting is `info`.
