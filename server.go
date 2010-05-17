@@ -8,6 +8,22 @@ import (
 	"bufio"
 )
 
+const (
+	readyCommandStr   = "R"
+	messageCommandStr = "M"
+	queryCommandStr   = "Q"
+	quitCommandStr    = "X"
+	errorCommandStr   = "E"
+)
+
+const (
+	timeoutHeaderStr  = "m"
+	toHeaderStr       = "t"
+	replyHeaderStr    = "r"
+	bodyLenHeaderStr  = "b"
+	errorHeaderStr    = "e"
+)
+
 type Server struct {
 	exchange *Exchange
 	listener net.Listener
@@ -69,7 +85,7 @@ func (server *Server) handle(stream *CommandStream) {
 		onAddressCount := 0
 		
 		for onAddressCount < maxOnAddresses {
-			onAddress, ok := headers["on" + strconv.Itoa(onAddressCount)]
+			onAddress, ok := headers[strconv.Itoa(onAddressCount)]
 			if !ok {
 				break
 			}
@@ -79,17 +95,17 @@ func (server *Server) handle(stream *CommandStream) {
 		}
 	
 		if onAddressCount == 0 {
-			stream.WriteError(os.NewError("missing header in READY: on0..onN")); return
+			stream.WriteError(os.NewError("missing onAddress header")); return
 		}
 		
-		timeoutStr, ok := headers["timeout"]
+		timeoutStr, ok := headers[timeoutHeaderStr]
 		if !ok {
-			stream.WriteError(os.NewError("missing header in READY: timeout")); return
+			stream.WriteError(os.NewError("missing timeout header")); return
 		}
 		
 		timeout, err := strconv.Atoi64(timeoutStr)
 		if err != nil {
-			stream.WriteError(os.NewError("invalid format for timeout header in READY")); return
+			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 		
 		msg := <-server.exchange.Ready(onAddresses[0:onAddressCount], timeout)
@@ -101,40 +117,40 @@ func (server *Server) handle(stream *CommandStream) {
 	}
 	
 	handleMessage := func(headers map[string]string) {
-		bodyLen, err := strconv.Atoi(headers["body"])
+		bodyLen, err := strconv.Atoi(headers[bodyLenHeaderStr])
 		if err != nil {
-			stream.WriteError(os.NewError("invalid format for header body")); return
+			stream.WriteError(os.NewError("invalid body length format")); return
 		}
 		
-		timeout, err := strconv.Atoi64(headers["timeout"])
+		timeout, err := strconv.Atoi64(headers[timeoutHeaderStr])
 		if err != nil {
-			stream.WriteError(os.NewError("invalid format for header timeout")); return
+			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 		
 		body, err := stream.ReadBody(bodyLen)
 		
-		server.exchange.Send(headers["to"], headers["reply"], timeout, body)
+		server.exchange.Send(headers[toHeaderStr], headers[replyHeaderStr], timeout, body)
 	}
 	
 	handleQuery := func(headers map[string]string) {
-		timeoutStr, ok := headers["timeout"]
+		timeoutStr, ok := headers[timeoutHeaderStr]
 		if !ok {
-			stream.WriteError(os.NewError("missing header in READY: timeout")); return
+			stream.WriteError(os.NewError("missing timeout header")); return
 		}
 		
 		timeout, err := strconv.Atoi64(timeoutStr)
 		if err != nil {
-			stream.WriteError(os.NewError("invalid format for timeout header in READY")); return
+			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 	
-		bodyLen, err := strconv.Atoi(headers["body"])
+		bodyLen, err := strconv.Atoi(headers[bodyLenHeaderStr])
 		if err != nil {
-			stream.WriteError(os.NewError("invalid format for header body")); return
+			stream.WriteError(os.NewError("invalid body length format")); return
 		}
 		
 		body, err := stream.ReadBody(bodyLen)
 		
-		msg := server.exchange.Query(headers["to"], timeout, body)
+		msg := server.exchange.Query(headers[toHeaderStr], timeout, body)
 		
 		err = stream.WriteMessage(msg)
 		if err != nil {
@@ -150,13 +166,13 @@ func (server *Server) handle(stream *CommandStream) {
 		}
 		
 		switch command {
-		case "READY":
+		case readyCommandStr:
 			handleReady(headers)
-		case "MESSAGE":
+		case messageCommandStr:
 			handleMessage(headers)
-		case "QUERY":
+		case queryCommandStr:
 			handleQuery(headers)
-		case "QUIT":
+		case quitCommandStr:
 			stream.Close()	
 		default:
 			stream.WriteError(os.NewError("invalid command"))

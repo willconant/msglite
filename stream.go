@@ -75,14 +75,14 @@ func (stream *CommandStream) WriteCommand(command string, headers map[string]str
 
 func (stream *CommandStream) WriteMessage(msg Message) os.Error {
 	headers := make(map[string]string)
-	headers["to"] = msg.ToAddress
+	headers[toHeaderStr] = msg.ToAddress
 	if msg.ReplyAddress != "" {
-		headers["reply"] = msg.ReplyAddress
+		headers[replyHeaderStr] = msg.ReplyAddress
 	}
-	headers["timeout"] = strconv.Itoa64(msg.TimeoutSeconds)
-	headers["body"] = strconv.Itoa(len(msg.Body))
+	headers[timeoutHeaderStr] = strconv.Itoa64(msg.TimeoutSeconds)
+	headers[bodyLenHeaderStr] = strconv.Itoa(len(msg.Body))
 
-	err := stream.WriteCommand("MESSAGE", headers)
+	err := stream.WriteCommand(messageCommandStr, headers)
 	if err != nil {
 		return err
 	}
@@ -111,12 +111,12 @@ func (stream *CommandStream) Close() os.Error {
 }
 
 func (stream *CommandStream) WriteError(err os.Error) {
-	io.WriteString(stream.writer, fmt.Sprintf("ERROR\nmessage %v\n\n", err))
+	io.WriteString(stream.writer, fmt.Sprintf(errorCommandStr + "\n" + errorHeaderStr + " %v\n\n", err))
 	stream.Close()
 }
 
 func (stream *CommandStream) WriteQuit() os.Error {
-	_, err := io.WriteString(stream.writer, "QUIT\n\n")
+	_, err := io.WriteString(stream.writer, quitCommandStr + "\n\n")
 	if err != nil {
 		// we still close the stream
 		stream.Close()
