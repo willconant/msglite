@@ -137,78 +137,84 @@ body of bytes indicated by the first parameter of the command, followed by
 
 Clients may send the following commands to the msglite server:
 
--   Message Commands
+#### Message Commands
 
-    `> bodyLength timeoutSeconds toAddress [replyAddress]`
-    
-    If bodyLength is greater than 0, the command is followed by bodyLength
-    bytes followed by `"\r\n"`.
-    
-    The msglite server won't send any response to a message command.
+`> bodyLength timeoutSeconds toAddress [replyAddress]`
 
--   Ready Commands
+If bodyLength is greater than 0, the command is followed by bodyLength
+bytes followed by `"\r\n"`.
 
-    `< timeoutSeconds onAddress1 [onAddress2..onAddress8]`
+The msglite server won't send any response to a message command.
 
-    Clients may specify up to 8 addresses to receive messages on.
-    
-    If a message is already queued on any of the specified addresses, the
-    server will immediately respond with a message command corresponding to
-    that message. The server will only send one message per ready command,
-    even if there is more than one message available on the specified
-    addresses. Once a message has been sent, the client is no longer
-    considered ready and must send another ready command to receive further
-    messages.
-    
-    If no messages are ready on any of the specified addresses, the client's
-    readiness will be queued. When a message becomes available on any of
-    the specified addresses, the server will send a message command.
-    
-    If no messages become available within the specified number of timeout
-    seconds, the server will send a timeout command. Once a timeout command
-    has been sent, the client is no longer considered ready and must send
-    another ready command to receive further messages.
-    
-    If two or more clients indicate readiness on the same address at the
-    same time, they will receive messages in the order they became ready.
-    
--   Query Commands
+#### Ready Commands
 
-    `? bodyLength timeoutSeconds toAddress`
-    
-    If bodyLength is greater than 0, the command is followed by bodyLength
-    bytes followed by `"\r\n"`.
-    
-    Query commands act as a combination of a message and a ready command.
-    
-    Msglite will send your message to the indicated address appending a
-    single-use reply address the recipient can use to respond to the query.
-    
-    If a response becomes available before the indicated number of timeout
-    seconds, msglite will send a message command with that response.
-    
-    If no response becomes available within the indicated time, msglite will
-    send a timeout command.
+`< timeoutSeconds onAddress1 [onAddress2..onAddress8]`
 
--   Quit Commands
+Clients may specify up to 8 addresses to receive messages on.
 
-    `.`
+If a message is already queued on any of the specified addresses, the
+server will immediately respond with a message command corresponding to
+that message. The server will only send one message per ready command,
+even if there is more than one message available on the specified
+addresses. Once a message has been sent, the client is no longer
+considered ready and must send another ready command to receive further
+messages.
+
+If no messages are ready on any of the specified addresses, the client's
+readiness will be queued. When a message becomes available on any of
+the specified addresses, the server will send a message command.
+
+If no messages become available within the specified number of timeout
+seconds, the server will send a timeout command. Once a timeout command
+has been sent, the client is no longer considered ready and must send
+another ready command to receive further messages.
+
+If two or more clients indicate readiness on the same address at the
+same time, they will receive messages in the order they became ready.
     
-    The quit command will cause msglite to close the connection.
+#### Query Commands
+
+`? bodyLength timeoutSeconds toAddress`
+
+If bodyLength is greater than 0, the command is followed by bodyLength
+bytes followed by `"\r\n"`.
+
+Query commands act as a combination of a message and a ready command.
+
+Msglite will send your message to the indicated address appending a
+single-use reply address the recipient can use to respond to the query.
+
+If a response becomes available before the indicated number of timeout
+seconds, msglite will send a message command with that response.
+
+If no response becomes available within the indicated time, msglite will
+send a timeout command.
+
+#### Quit Commands
+
+`.`
+
+The quit command will cause msglite to close the connection.
 
 ### Server Commands
 
 Msglite may send the following commands to clients:
 
--   Message Commands
+#### Message Commands
 
-    Message commands from msglite to clients are formatted in exactly the same
-    way describted above.
+Message commands from msglite to clients are formatted in exactly the same
+way describted above.
 
--   Timeout Commands
+#### Timeout Commands
 
-    `*`
-    
-    Timeout commands are sent when a ready command or a query command times
-    out.
+`*`
 
+Timeout commands are sent when a ready command or a query command times
+out.
+
+#### Error Commands
+
+`- errorMessage`
+
+Errors are only sent if clients send bad data. The errorMessage may contain
+spaces.
