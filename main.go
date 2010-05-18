@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./msglite"
+	"msglite"
 	"flag"
 	"fmt"
 	"os"
