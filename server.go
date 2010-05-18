@@ -9,19 +9,12 @@ import (
 )
 
 const (
-	readyCommandStr   = "R"
-	messageCommandStr = "M"
-	queryCommandStr   = "Q"
-	quitCommandStr    = "X"
-	errorCommandStr   = "E"
-)
-
-const (
-	timeoutHeaderStr  = "m"
-	toHeaderStr       = "t"
-	replyHeaderStr    = "r"
-	bodyLenHeaderStr  = "b"
-	errorHeaderStr    = "e"
+	readyCommandStr   = "<"
+	messageCommandStr = ">"
+	queryCommandStr   = "?"
+	timeoutCommandStr = "*"
+	quitCommandStr    = "."
+	errorCommandStr   = "-"
 )
 
 type Server struct {
@@ -80,35 +73,17 @@ func (server *Server) Quit() {
 
 func (server *Server) handle(stream *CommandStream) {
 		
-	handleReady := func(headers map[string]string) {
-		var onAddresses [maxOnAddresses]string
-		onAddressCount := 0
-		
-		for onAddressCount < maxOnAddresses {
-			onAddress, ok := headers[strconv.Itoa(onAddressCount)]
-			if !ok {
-				break
-			}
-			
-			onAddresses[onAddressCount] = onAddress
-			onAddressCount += 1
+	handleReady := func(params []string) {
+		if len(params) < 2 {
+			stream.WriteError(os.NewError("ready format: < timeout onAddr1 [onAddr2..onAddrN]")); return
 		}
 	
-		if onAddressCount == 0 {
-			stream.WriteError(os.NewError("missing onAddress header")); return
-		}
-		
-		timeoutStr, ok := headers[timeoutHeaderStr]
-		if !ok {
-			stream.WriteError(os.NewError("missing timeout header")); return
-		}
-		
-		timeout, err := strconv.Atoi64(timeoutStr)
+		timeout, err := strconv.Atoi64(params[0])
 		if err != nil {
 			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 		
-		msg := <-server.exchange.Ready(onAddresses[0:onAddressCount], timeout)
+		msg := <-server.exchange.Ready(params[1:], timeout)
 	
 		err = stream.WriteMessage(msg)
 		if err != nil {
@@ -116,41 +91,63 @@ func (server *Server) handle(stream *CommandStream) {
 		}
 	}
 	
-	handleMessage := func(headers map[string]string) {
-		bodyLen, err := strconv.Atoi(headers[bodyLenHeaderStr])
+	handleMessage := func(params []string) {
+		if len(params) < 3 || len(params) > 4 {
+			stream.WriteError(os.NewError("message format: > bodyLen timeout toAddr [replyAddr]")); return
+		}
+	
+		bodyLen, err := strconv.Atoi(params[0])
 		if err != nil {
 			stream.WriteError(os.NewError("invalid body length format")); return
 		}
 		
-		timeout, err := strconv.Atoi64(headers[timeoutHeaderStr])
+		timeout, err := strconv.Atoi64(params[1])
 		if err != nil {
 			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 		
-		body, err := stream.ReadBody(bodyLen)
+		toAddr := params[2]
 		
-		server.exchange.Send(headers[toHeaderStr], headers[replyHeaderStr], timeout, body)
+		var replyAddr string
+		if len(params) == 4 {
+			replyAddr = params[3]
+		}
+		
+		var body string
+		
+		if bodyLen > 0 {
+			body, err = stream.ReadBody(bodyLen)
+			if err != nil {
+				stream.WriteError(err); return
+			}
+		}
+		
+		server.exchange.Send(toAddr, replyAddr, timeout, body)
 	}
 	
-	handleQuery := func(headers map[string]string) {
-		timeoutStr, ok := headers[timeoutHeaderStr]
-		if !ok {
-			stream.WriteError(os.NewError("missing timeout header")); return
-		}
-		
-		timeout, err := strconv.Atoi64(timeoutStr)
-		if err != nil {
-			stream.WriteError(os.NewError("invalid timeout format")); return
+	handleQuery := func(params []string) {
+		if len(params) != 3 {
+			stream.WriteError(os.NewError("query format: ? bodyLen timeout toAddr")); return
 		}
 	
-		bodyLen, err := strconv.Atoi(headers[bodyLenHeaderStr])
+		bodyLen, err := strconv.Atoi(params[0])
 		if err != nil {
 			stream.WriteError(os.NewError("invalid body length format")); return
 		}
 		
-		body, err := stream.ReadBody(bodyLen)
+		timeout, err := strconv.Atoi64(params[1])
+		if err != nil {
+			stream.WriteError(os.NewError("invalid timeout format")); return
+		}
 		
-		msg := server.exchange.Query(headers[toHeaderStr], timeout, body)
+		toAddr := params[2]
+		
+		body, err := stream.ReadBody(bodyLen)
+		if err != nil {
+			stream.WriteError(err); return
+		}
+		
+		msg := server.exchange.Query(toAddr, timeout, body)
 		
 		err = stream.WriteMessage(msg)
 		if err != nil {
@@ -159,19 +156,19 @@ func (server *Server) handle(stream *CommandStream) {
 	}
 
 	for !stream.closed {
-		command, headers, err := stream.ReadCommand()
+		command, err := stream.ReadCommand()
 		if err != nil {
 			stream.WriteError(err)
 			break
 		}
 		
-		switch command {
+		switch command[0] {
 		case readyCommandStr:
-			handleReady(headers)
+			handleReady(command[1:])
 		case messageCommandStr:
-			handleMessage(headers)
+			handleMessage(command[1:])
 		case queryCommandStr:
-			handleQuery(headers)
+			handleQuery(command[1:])
 		case quitCommandStr:
 			stream.Close()	
 		default:

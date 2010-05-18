@@ -52,10 +52,9 @@ Msglite is written in the Go programming language.
 Getting Started
 ---------------
 
-Follow these [instructions][go_install] for installing the Go programming
-language.
+Follow these instructions for installing the Go programming language:
 
-[go_install]: <http://golang.org/doc/install.html>
+<http://golang.org/doc/install.html>
 
 Then download and build msglite like this:
 
@@ -73,10 +72,10 @@ Client Libraries
 
 Currently, the only supported client library is for Perl. You can grab it here:
 
-    $ git clone git://github.com/willconant/msglite-perl.git
+<http://github.com/willconant/msglite-perl>
 
-The whole thing is fewer than 160 lines. Writing a client library for your
-prefered language should be trivial.
+The msglite protocol allows clients to be extremely simple. Check it out in the
+sections below.
 
 
 Listening on a Different Unix Socket
@@ -90,6 +89,9 @@ Listening on a TCP Socket
 
     $ ./msglite -network tcp -laddr 127.0.0.1:8888
 
+Listening on a TCP socket makes it easy to experiment with the msglite protocol
+using telnet.
+
 
 Adjusting Log Output
 --------------------
@@ -97,3 +99,116 @@ Adjusting Log Output
     $ ./msglite -loglevel [minimal|info|debug]
 
 The default setting is `info`.
+
+
+Msglite Protocol
+----------------
+
+### Example
+
+The msglite protocol is easy for both computers and humans to read and compose.
+Take a look at this example:
+
+    C: > 5 1 someAddress
+    C: hello
+    C: < 1 someAddress
+    S: > 5 1 someAddress
+    S: hello
+
+In this example, the client sends a message with the body of "hello" to the
+address "someAddress". Presumably, no other client is awaiting messages on
+that address, so the message is queued.
+
+The client then indicates readiness to receive a message on that same address,
+and the server sends the queued message to the client.
+
+### Commands
+
+Conversations with msglite take the form of a series of so-called commands.
+Each command consists of a single line terminated by `"\r\n"`. Command lines
+start with a sigil indicating the type of command and containing 0 or more
+arguments separated by whitespace.
+
+In the case of message and query commands, the command line is followed by a
+body of bytes indicated by the first parameter of the command, followed by
+`"\r\n"`.
+
+### Client Commands
+
+Clients may send the following commands to the msglite server:
+
+-   Message Commands
+
+    `> bodyLength timeoutSeconds toAddress [replyAddress]`
+    
+    If bodyLength is greater than 0, the command is followed by bodyLength
+    bytes followed by `"\r\n"`.
+    
+    The msglite server won't send any response to a message command.
+
+-   Ready Commands
+
+    `< timeoutSeconds onAddress1 [onAddress2..onAddress8]`
+
+    Clients may specify up to 8 addresses to receive messages on.
+    
+    If a message is already queued on any of the specified addresses, the
+    server will immediately respond with a message command corresponding to
+    that message. The server will only send one message per ready command,
+    even if there is more than one message available on the specified
+    addresses. Once a message has been sent, the client is no longer
+    considered ready and must send another ready command to receive further
+    messages.
+    
+    If no messages are ready on any of the specified addresses, the client's
+    readiness will be queued. When a message becomes available on any of
+    the specified addresses, the server will send a message command.
+    
+    If no messages become available within the specified number of timeout
+    seconds, the server will send a timeout command. Once a timeout command
+    has been sent, the client is no longer considered ready and must send
+    another ready command to receive further messages.
+    
+    If two or more clients indicate readiness on the same address at the
+    same time, they will receive messages in the order they became ready.
+    
+-   Query Commands
+
+    `? bodyLength timeoutSeconds toAddress`
+    
+    If bodyLength is greater than 0, the command is followed by bodyLength
+    bytes followed by `"\r\n"`.
+    
+    Query commands act as a combination of a message and a ready command.
+    
+    Msglite will send your message to the indicated address appending a
+    single-use reply address the recipient can use to respond to the query.
+    
+    If a response becomes available before the indicated number of timeout
+    seconds, msglite will send a message command with that response.
+    
+    If no response becomes available within the indicated time, msglite will
+    send a timeout command.
+
+-   Quit Commands
+
+    `.`
+    
+    The quit command will cause msglite to close the connection.
+
+### Server Commands
+
+Msglite may send the following commands to clients:
+
+-   Message Commands
+
+    Message commands from msglite to clients are formatted in exactly the same
+    way describted above.
+
+-   Timeout Commands
+
+    `*`
+    
+    Timeout commands are sent when a ready command or a query command times
+    out.
+

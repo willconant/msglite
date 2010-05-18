@@ -1,7 +1,6 @@
 package msglite
 
 import (
-	"fmt"
 	"strconv"
 	"os"
 	"io"
@@ -15,91 +14,67 @@ type CommandStream struct {
 	closed bool
 }
 
-func (stream *CommandStream) ReadCommand() (string, map[string]string, os.Error) {
+func (stream *CommandStream) ReadCommand() ([]string, os.Error) {
 	line, err := stream.reader.ReadString('\n')
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
-	
-	command := line[0:len(line)-1]
-	
-	headers := make(map[string]string)
-	for {
-		line, err := stream.reader.ReadString('\n')
-		if err != nil {
-			return "", nil, err
-		}
-		
-		if line == "\n" {
-			break
-		}
-		
-		sepIdx := strings.Index(line, " ")
-		header := line[0:sepIdx]
-		value := line[sepIdx+1:len(line)-1]
 
-		headers[header] = value
-	}
-	
-	return command, headers, nil
+	return strings.Fields(strings.TrimSpace(line)), nil
 }
 
 func (stream *CommandStream) ReadBody(bodyLen int) (string, os.Error) {
-	bodyBuf := make([]byte, bodyLen + 1)
+	bodyBuf := make([]byte, bodyLen + 2)
 	_, err := io.ReadFull(stream.reader, bodyBuf)
 	if err != nil {
 		return "", err
 	}
 	
-	if bodyBuf[bodyLen] != '\n' {
-		return "", os.NewError("body must be followed by newline")
+	if bodyBuf[bodyLen] != '\r' || bodyBuf[bodyLen+1] != '\n' {
+		return "", os.NewError("body must be followed by \\r\\n")
 	}
 	
 	return string(bodyBuf[0:bodyLen]), nil
 }
 
-func (stream *CommandStream) WriteCommand(command string, headers map[string]string) os.Error {
-	_, err := io.WriteString(stream.writer, command + "\n")
-	if err != nil {
-		return err
-	}
-	
-	for header, value := range(headers) {
-		_, err := io.WriteString(stream.writer, header + " " + value + "\n")
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (stream *CommandStream) WriteCommand(command []string) os.Error {
+	_, err := io.WriteString(stream.writer, strings.Join(command, " ") + "\r\n")
+	return err
 }
 
 func (stream *CommandStream) WriteMessage(msg Message) os.Error {
-	headers := make(map[string]string)
-	headers[toHeaderStr] = msg.ToAddress
-	if msg.ReplyAddress != "" {
-		headers[replyHeaderStr] = msg.ReplyAddress
+	if msg.ToAddress == "" {
+		err := stream.WriteCommand([]string{timeoutCommandStr})
+		return err
 	}
-	headers[timeoutHeaderStr] = strconv.Itoa64(msg.TimeoutSeconds)
-	headers[bodyLenHeaderStr] = strconv.Itoa(len(msg.Body))
 
-	err := stream.WriteCommand(messageCommandStr, headers)
+	command := make([]string, 5)
+	command[0] = messageCommandStr
+	command[1] = strconv.Itoa(len(msg.Body))
+	command[2] = strconv.Itoa64(msg.TimeoutSeconds)
+	command[3] = msg.ToAddress
+	
+	if msg.ReplyAddress != "" {
+		command[4] = msg.ReplyAddress
+	} else {
+		command = command[0:4]
+	}
+	
+	err := stream.WriteCommand(command)
 	if err != nil {
 		return err
 	}
 	
-	_, err = io.WriteString(stream.writer, "\n")
-	if err != nil {
-		return err
-	}
-	
-	_, err = io.WriteString(stream.writer, msg.Body)
-	if err != nil {
-		return err
-	}
-	
-	_, err = io.WriteString(stream.writer, "\n")
-	if err != nil {
-		return err
+	if len(msg.Body) > 0 {
+		_, err = io.WriteString(stream.writer, msg.Body)
+		if err != nil {
+			return err
+		}
+		
+		_, err = io.WriteString(stream.writer, "\r\n")
+		if err != nil {
+			return err
+		}
 	}
 	
 	return nil
@@ -111,12 +86,12 @@ func (stream *CommandStream) Close() os.Error {
 }
 
 func (stream *CommandStream) WriteError(err os.Error) {
-	io.WriteString(stream.writer, fmt.Sprintf(errorCommandStr + "\n" + errorHeaderStr + " %v\n\n", err))
+	stream.WriteCommand([]string{errorCommandStr, err.String()})
 	stream.Close()
 }
 
 func (stream *CommandStream) WriteQuit() os.Error {
-	_, err := io.WriteString(stream.writer, quitCommandStr + "\n\n")
+	err := stream.WriteCommand([]string{quitCommandStr})
 	if err != nil {
 		// we still close the stream
 		stream.Close()
