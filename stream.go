@@ -1,3 +1,7 @@
+// Copyright (c) 2010 William R. Conant, WillConant.com
+// Use of this source code is governed by the MIT licence:
+// http://www.opensource.org/licenses/mit-license.php
+
 package msglite
 
 import (
@@ -42,8 +46,8 @@ func (stream *CommandStream) WriteCommand(command []string) os.Error {
 	return err
 }
 
-func (stream *CommandStream) WriteMessage(msg Message) os.Error {
-	if msg.ToAddress == "" {
+func (stream *CommandStream) WriteMessage(msg *Message) os.Error {
+	if msg == nil {
 		err := stream.WriteCommand([]string{timeoutCommandStr})
 		return err
 	}

@@ -218,3 +218,9 @@ out.
 
 Errors are only sent if clients send bad data. The errorMessage may contain
 spaces.
+
+
+Copyright
+---------
+
+Copyright &copy; 2010 William R. Conant, <http://WillConant.com/>

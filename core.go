@@ -1,3 +1,7 @@
+// Copyright (c) 2010 William R. Conant, WillConant.com
+// Use of this source code is governed by the MIT licence:
+// http://www.opensource.org/licenses/mit-license.php
+
 package msglite
 
 import (
@@ -214,17 +218,17 @@ func (exchange *Exchange) GenerateUnusedAddress() string {
 	return <- replyAddrChan
 }
 
-func (exchange *Exchange) Send(toAddress string, replyAddress string, timeoutSeconds int64, body string) {
+func (exchange *Exchange) Send(body string, timeoutSeconds int64, toAddress string, replyAddress string) {
 	exchange.messageChan <- Message{toAddress, replyAddress, timeoutSeconds, body, time.Nanoseconds() + (timeoutSeconds * 1e9)}
 }
 
-func (exchange *Exchange) Query(toAddress string, timeoutSeconds int64, body string) Message {
+func (exchange *Exchange) Query(body string, timeoutSeconds int64, toAddress string) *Message {
 	replyAddr := exchange.GenerateUnusedAddress()
 	exchange.messageChan <- Message{toAddress, replyAddr, timeoutSeconds, body, time.Nanoseconds() + (timeoutSeconds * 1e9)}
-	return <- exchange.Ready([]string{replyAddr}, timeoutSeconds)
+	return exchange.Ready(timeoutSeconds, []string{replyAddr})
 }
 
-func (exchange *Exchange) Ready(onAddresses []string, timeoutSeconds int64) <-chan Message {
+func (exchange *Exchange) Ready(timeoutSeconds int64, onAddresses []string) *Message {
 	rs := new(readyState)
 	for i := 0; i < len(onAddresses); i++ {
 		rs.onAddresses[i] = onAddresses[i]
@@ -235,5 +239,9 @@ func (exchange *Exchange) Ready(onAddresses []string, timeoutSeconds int64) <-ch
 	rs.messageChan = messageChan
 
 	exchange.readyStateChan <- rs
-	return messageChan
+	replyMsg := <-messageChan
+	if replyMsg.ToAddress == "" {
+		return nil
+	}
+	return &replyMsg
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2010 William R. Conant, WillConant.com
+// Use of this source code is governed by the MIT licence:
+// http://www.opensource.org/licenses/mit-license.php
+
 package msglite
 
 import (
@@ -83,7 +87,7 @@ func (server *Server) handle(stream *CommandStream) {
 			stream.WriteError(os.NewError("invalid timeout format")); return
 		}
 		
-		msg := <-server.exchange.Ready(params[1:], timeout)
+		msg := server.exchange.Ready(timeout, params[1:])
 	
 		err = stream.WriteMessage(msg)
 		if err != nil {
@@ -122,7 +126,7 @@ func (server *Server) handle(stream *CommandStream) {
 			}
 		}
 		
-		server.exchange.Send(toAddr, replyAddr, timeout, body)
+		server.exchange.Send(body, timeout, toAddr, replyAddr)
 	}
 	
 	handleQuery := func(params []string) {
@@ -147,7 +151,7 @@ func (server *Server) handle(stream *CommandStream) {
 			stream.WriteError(err); return
 		}
 		
-		msg := server.exchange.Query(toAddr, timeout, body)
+		msg := server.exchange.Query(body, timeout, toAddr)
 		
 		err = stream.WriteMessage(msg)
 		if err != nil {

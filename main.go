@@ -1,3 +1,7 @@
+// Copyright (c) 2010 William R. Conant, WillConant.com
+// Use of this source code is governed by the MIT licence:
+// http://www.opensource.org/licenses/mit-license.php
+
 package main
 
 import (
@@ -9,9 +13,12 @@ import (
 )
 
 func main() {
-	var network, laddr, logLevel string
+	var network, laddr, httpNetwork, httpLaddr, httpReqMsgAddr, logLevel string
 	flag.StringVar(&network, "network", "unix", "unix or tcp")
-	flag.StringVar(&laddr, "laddr", "", "listen address (either socket path, or ip:port)")
+	flag.StringVar(&laddr, "address", "", "listen address (either socket path, or ip:port)")
+	flag.StringVar(&httpNetwork, "http-network", "tcp", "unix or tcp")
+	flag.StringVar(&httpLaddr, "http-address", "", "http listen address (either socket path, or ip:port)")
+	flag.StringVar(&httpReqMsgAddr, "http-msg-address", "msglite.httpRequests", "msglite address to which http request messages are sent")
 	flag.StringVar(&logLevel, "loglevel", "info", "logging level (one of 'minimal', 'info' or 'debug')")
 	flag.Parse()
 	
@@ -20,7 +27,7 @@ func main() {
 		case "unix":
 			laddr = "/tmp/msglite.socket"
 		case "tcp":
-			laddr = "127.0.0.1:9999"
+			laddr = "127.0.0.1:9813"
 		}
 	}	
 	
@@ -40,7 +47,15 @@ func main() {
 	}
 	
 	server := msglite.NewServer(exchange, network, laddr)
+	fmt.Printf("msglite listening on %v (%v)\n", laddr, network)
 	
+	var httpServer *msglite.HttpServer
+	if httpLaddr != "" {
+		httpServer = msglite.NewHttpServer(exchange, httpNetwork, httpLaddr, httpReqMsgAddr)
+		go httpServer.Run()
+		fmt.Printf("msglite http server listening on %v (%v) requests are bing routed to %v\n", httpLaddr, httpNetwork, httpReqMsgAddr)
+	}
+
 	go func() {
 		quit := false
 		for !quit {
@@ -57,10 +72,12 @@ func main() {
 				quit = true
 			}
 		}
+		if httpServer != nil {
+			httpServer.Quit()
+		}
 		server.Quit()
 	}()
 	
-	fmt.Printf("msglite listening on %v (%v)\n", laddr, network)
 	server.Run()
 	fmt.Printf("msglite quitting\n")
 }

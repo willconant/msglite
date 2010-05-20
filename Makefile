@@ -7,7 +7,8 @@ include $(GOROOT)/src/Make.$(GOARCH)
 TARG=msglite
 GOFILES=\
 	core.go\
-	http.go\
+	httpserver.go\
+	httprequest.go\
 	server.go\
 	stream.go\
 
