@@ -75,7 +75,7 @@ func doError(conn net.Conn, err os.Error) {
 	b.WriteString("HTTP/1.0 500 Internal Server Error\r\n")
 	b.WriteString("Content-Type: text/plain\r\n")
 	b.WriteString("Connection: close\r\n\r\n")
-	b.WriteString("An Error Has Occurred")
+	b.WriteString(fmt.Sprintf("An Error Has Occurred\n%v\n", err))
 	
 	conn.Write(b.Bytes())
 	conn.Close()
@@ -138,36 +138,41 @@ func (server *HttpServer) relayReply(replyMsg *Message, conn net.Conn) {
 		goto BadReply
 	}
 		
-	headers, ok := reply[1].(map[string]interface{})
+	headers, ok := reply[1].([]interface{})
 	if !ok {
-		err = os.NewError("second item of reply wasn't a map[string]interface{}")
+		err = os.NewError("second item of reply wasn't a []interface{}")
 		goto BadReply
 	}
 	
-	headerStrs := make(map[string]string)
-	for k, v := range(headers) {
-		vStr, ok := v.(string)
-		if !ok {
-			err = os.NewError("value of header wasn't a string")
-			goto BadReply
-		}
-		
-		// there is almost certainly a whole list of headers I should ignore from the worker
-		if canonicalHeaderKey(k) != "Connection" {
-			headerStrs[k] = vStr
-		}
+	if len(headers) % 2 != 0 {
+		err = os.NewError("headers array had odd number of items")
+		goto BadReply
 	}
 	
 	var respBuffer bytes.Buffer
 	respBuffer.WriteString("HTTP/1.0 " + status + " " + st + "\r\n")
 	
-	for k, v := range(headerStrs) {
-		respBuffer.WriteString(k)
-		respBuffer.WriteString(": ")
-		respBuffer.WriteString(v)
-		respBuffer.WriteString("\r\n")
+	for i := 0; i < len(headers); i += 2 {
+		kStr, ok := headers[i].(string)
+		if !ok {
+			err = os.NewError("header key wasn't a string")
+			goto BadReply
+		}
+		
+		kStr = canonicalHeaderKey(kStr)
+		
+		vStr, ok := headers[i+1].(string)
+		if !ok {
+			err = os.NewError("header value wasn't a string")
+			goto BadReply
+		}
+		
+		// there is almost certainly a whole list of headers I should ignore from the worker
+		if kStr != "Connection" {
+			respBuffer.WriteString(kStr + ": " + vStr + "\r\n")
+		}
 	}
-	
+			
 	respBuffer.WriteString("Connection: close\r\n\r\n")
 	
 	_, err = conn.Write(respBuffer.Bytes())
@@ -197,5 +202,5 @@ func (server *HttpServer) relayReply(replyMsg *Message, conn net.Conn) {
 	}
 		
 BadReply:
-	doError(conn, os.NewError("bad reply"))
+	doError(conn, err)
 }
