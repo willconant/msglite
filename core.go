@@ -6,7 +6,6 @@ package msglite
 
 import (
 	"fmt"
-	"rand"
 	"container/vector"
 	"time"
 	"strings"
@@ -46,6 +45,7 @@ type Exchange struct {
 	messageQueues        map [string] *vector.Vector
 	
 	logLevel             int
+	unusedAddressCounter uint32
 }
 
 func NewExchange() (exchange *Exchange) {
@@ -56,6 +56,7 @@ func NewExchange() (exchange *Exchange) {
 		make(map [string] *vector.Vector),
 		make(map [string] *vector.Vector),
 		LogLevelInfo,
+		0,
 	}
 	
 	ticker := time.NewTicker(1e9)
@@ -160,13 +161,8 @@ func (exchange *Exchange) handleMessage(m Message) {
 }
 
 func (exchange *Exchange) handleUnusedAddressReq(replyChan chan string) {
-	for {
-		randAddr := fmt.Sprintf("%v", rand.Float())
-		if _, ok := exchange.readyStateQueues[randAddr]; !ok {
-			replyChan <- randAddr
-			break
-		}
-	}
+	exchange.unusedAddressCounter++
+	replyChan <- fmt.Sprintf("%X.%X", time.Seconds(), exchange.unusedAddressCounter)
 }
 
 func (exchange *Exchange) handleTick(t int64) {
