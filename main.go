@@ -64,7 +64,7 @@ func main() {
 			switch sig.(signal.UnixSignal) {
 			case 1: // SIGHUP
 				quit = true
-			case 2: // SIGNINT
+			case 2: // SIGINT
 				quit = true
 			case 3: // SIGQUIT
 				quit = true
