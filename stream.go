@@ -41,6 +41,50 @@ func (stream *CommandStream) ReadBody(bodyLen int) (string, os.Error) {
 	return string(bodyBuf[0:bodyLen]), nil
 }
 
+func (stream *CommandStream) ReadMessage() (*Message, os.Error) {
+	inCommand, err := stream.ReadCommand()
+	
+	if inCommand[0] == timeoutCommandStr {
+		return nil, nil
+	} else if inCommand[0] != messageCommandStr {
+		return nil, os.NewError("invalid message from server")
+	}
+	
+	params := inCommand[1:]
+	
+	if len(params) < 3 || len(params) > 4 {
+		return nil, os.NewError("invalid message from server")
+	}
+
+	bodyLen, err := strconv.Atoi(params[0])
+	if err != nil {
+		return nil, os.NewError("invalid message from server")
+	}
+	
+	timeout, err := strconv.Atoi64(params[1])
+	if err != nil {
+		return nil, os.NewError("invalid message from server")
+	}
+	
+	toAddr := params[2]
+	
+	var replyAddr string
+	if len(params) == 4 {
+		replyAddr = params[3]
+	}
+	
+	var body string
+	
+	if bodyLen > 0 {
+		body, err = stream.ReadBody(bodyLen)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	return &Message{toAddr, replyAddr, timeout, body, 0}, nil
+}
+
 func (stream *CommandStream) WriteCommand(command []string) os.Error {
 	_, err := io.WriteString(stream.writer, strings.Join(command, " ") + "\r\n")
 	return err
@@ -71,6 +115,33 @@ func (stream *CommandStream) WriteMessage(msg *Message) os.Error {
 	
 	if len(msg.Body) > 0 {
 		_, err = io.WriteString(stream.writer, msg.Body)
+		if err != nil {
+			return err
+		}
+		
+		_, err = io.WriteString(stream.writer, "\r\n")
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+func (stream *CommandStream) WriteQuery(body string, timeoutSeconds int64, toAddress string) os.Error {
+	command := make([]string, 4)
+	command[0] = queryCommandStr
+	command[1] = strconv.Itoa(len(body))
+	command[2] = strconv.Itoa64(timeoutSeconds)
+	command[3] = toAddress
+		
+	err := stream.WriteCommand(command)
+	if err != nil {
+		return err
+	}
+	
+	if len(body) > 0 {
+		_, err = io.WriteString(stream.writer, body)
 		if err != nil {
 			return err
 		}
