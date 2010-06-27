@@ -34,8 +34,8 @@ The primary advantages of this approach are:
 1. An HTTP request handler can reply to requests in an order other
 than the order in which they were received. It can even forward a
 request to another Msglite client which can handle the reply on its
-own. These concepts are fundamental to building real-time "Comet"
-applications.
+own. This opens up all sorts of possibilities for writing real-time
+"Comet" applications.
 
 2. Your HTTP request handlers can gracefully restart without dropping
 queued requests.
@@ -57,7 +57,7 @@ Then download and build msglite like this:
 
     $ git clone git://github.com/willconant/msglite.git
     $ cd msglite
-    $ ./build.pl
+    $ make
 
 Start msglite like this:
 
@@ -67,7 +67,7 @@ Start msglite like this:
 Documentation and Client Libraries
 ----------------------------------
 
-Documentation and an up-to-date list of client libraries is available
+Documentation and an up-to-date list of client libraries are available
 on the Wiki:
 
 <http://wiki.github.com/willconant/msglite/>
