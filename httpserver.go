@@ -83,6 +83,11 @@ func doError(conn net.Conn, err os.Error) {
 
 func (server *HttpServer) handle(conn net.Conn) {
 	req, err := readHttpRequest(conn)
+	if err != nil {
+		doError(conn, err)
+		return
+	}
+	
 	replyMsg, err := server.relayRequest(req)
 	if err != nil {
 		doError(conn, err)
@@ -92,6 +97,7 @@ func (server *HttpServer) handle(conn net.Conn) {
 		doError(conn, os.NewError("reply timed out"))
 		return
 	}
+	
 	server.relayReply(replyMsg, conn)
 }
 
