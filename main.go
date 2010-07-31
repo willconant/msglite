@@ -12,6 +12,8 @@ import (
 	"os/signal"
 )
 
+const versionString = "v0.1.6"
+
 func main() {
 	var network, laddr, httpNetwork, httpLaddr, httpReqMsgAddr, logLevel string
 	flag.StringVar(&network, "network", "unix", "unix or tcp")
@@ -47,7 +49,7 @@ func main() {
 	}
 	
 	server := msglite.NewServer(exchange, network, laddr)
-	fmt.Printf("msglite listening on %v (%v)\n", laddr, network)
+	fmt.Printf("msglite %v listening on %v (%v)\n", versionString, laddr, network)
 	
 	var httpServer *msglite.HttpServer
 	if httpLaddr != "" {
